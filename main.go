@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"time"
 
@@ -42,9 +43,13 @@ func work(c *cli.Context) error {
 		return fmt.Errorf("syncing %v %v %v %v %v", syncing.StartingBlock, syncing.CurrentBlock, syncing.HighestBlock,
 			syncing.PulledStates, syncing.KnownStates)
 	}
-	fmt.Println(client.BalanceAt(ctx, account, nil))
+	balance, err := client.BalanceAt(ctx, account, nil)
+	if err == nil {
+		var fBalance = big.NewFloat(0).SetInt(balance)
+		fmt.Printf(fBalance.Quo(fBalance, big.NewFloat(100000000000000000)).String())
+	}
 
-	return nil
+	return err
 }
 
 func main() {
