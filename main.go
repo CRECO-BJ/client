@@ -93,6 +93,7 @@ func (w *WalletClient) WaitExit() {
 }
 
 func init() {
+	wallet = NewWalletClient()
 	app.Flags = flags
 	app.Commands = commands
 	app.Action = defaulWork
