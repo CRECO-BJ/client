@@ -81,12 +81,15 @@ func (w *WalletClient) Exit() {
 		w.client.Close()
 	}
 	w.cancel()
-	close(w.exit) // close channel to signal exit
+	w.exit <- struct{}{} // close channel to signal exit
 }
 
 // WaitExit wait for the signal of exit
 func (w *WalletClient) WaitExit() {
-	<-w.exit
+	if w != nil {
+		<-w.exit
+	}
+	panic("error exit chan has not been initialized!")
 }
 
 func init() {
