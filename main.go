@@ -19,7 +19,11 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-const etherWei = 100000000000000000
+const (
+	etherWei    = 100000000000000000
+	version     = "0.0.1"
+	description = "A simple multichain command line light wallet"
+)
 
 var account = common.HexToAddress("0x8f2d2b848ede60d9480631fe6a365cbc8e304c14")
 
@@ -69,6 +73,8 @@ var (
 
 func init() {
 	wallet = NewWalletClient()
+	app.Description = description
+	app.Version = version
 	app.Flags = flags
 	app.Commands = commands
 	app.Action = defaulWork
