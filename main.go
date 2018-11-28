@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"syscall"
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -16,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/urfave/cli"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const etherWei = 100000000000000000
@@ -34,7 +36,7 @@ var (
 	commands = []cli.Command{
 		{
 			Name:    "new",
-			Aliases: []string{"a"},
+			Aliases: []string{"n"},
 			Usage:   "create a new account and attach the account to this wallet",
 			Action:  newAccount,
 		},
@@ -112,12 +114,15 @@ func main() {
 func newAccount(c *cli.Context) error {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("Please input the password for the new account:")
-	passwd, err := reader.ReadString('\n')
-	if err != nil {
+
+	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err == nil {
 		return err
 	}
+	fmt.Println("\nPassword typed: " + string(bytePassword))
+	password := string(bytePassword)
 
-	a, err := wallet.keys.NewAccount(passwd)
+	a, err := wallet.keys.NewAccount(password)
 	if err != nil {
 		return err
 	}
