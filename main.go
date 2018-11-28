@@ -1,17 +1,22 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
-	"time"
+	"strconv"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/urfave/cli"
 )
+
+const etherWei = 100000000000000000
 
 var account = common.HexToAddress("0x8f2d2b848ede60d9480631fe6a365cbc8e304c14")
 
@@ -59,39 +64,6 @@ var (
 	wallet *WalletClient
 )
 
-// WalletClient wraps all the basics for a wallet
-type WalletClient struct {
-	client *ethclient.Client
-	ctx    context.Context
-	cancel context.CancelFunc
-	exit   chan struct{} // channel to signal the default acction that exit is safe
-}
-
-// NewWalletClient returns a wallet client with ctx and exit channel
-func NewWalletClient() *WalletClient {
-	re := WalletClient{}
-	re.ctx, re.cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	re.exit = make(chan struct{})
-	return &re
-}
-
-// Exit signal that exit is allowed
-func (w *WalletClient) Exit() {
-	if w.client != nil {
-		w.client.Close()
-	}
-	w.cancel()
-	w.exit <- struct{}{} // close channel to signal exit
-}
-
-// WaitExit wait for the signal of exit
-func (w *WalletClient) WaitExit() {
-	if w != nil {
-		<-w.exit
-	}
-	panic("error exit chan has not been initialized!")
-}
-
 func init() {
 	wallet = NewWalletClient()
 	app.Flags = flags
@@ -108,7 +80,7 @@ func init() {
 	}
 
 	app.After = func(ctx *cli.Context) error {
-		wallet.WaitExit()
+		wallet.Wait()
 		return nil
 	}
 }
@@ -123,13 +95,8 @@ func defaulWork(c *cli.Context) error {
 		return fmt.Errorf("syncing %v %v %v %v %v", syncing.StartingBlock, syncing.CurrentBlock, syncing.HighestBlock,
 			syncing.PulledStates, syncing.KnownStates)
 	}
-	balance, err := client.BalanceAt(wallet.ctx, account, nil)
-	if err == nil {
-		var fBalance = big.NewFloat(0).SetInt(balance)
-		fmt.Println(fBalance.Quo(fBalance, big.NewFloat(100000000000000000)).String())
-	}
 
-	wallet.Exit()
+	go wallet.Exit()
 
 	return err
 }
@@ -141,21 +108,113 @@ func main() {
 }
 
 func newAccount(c *cli.Context) error {
+	passwd := c.String("passwd")
+
+	a, err := wallet.keys.NewAccount(passwd)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Account ", a, " has been created and added to the wallet")
+
 	return nil
 }
 
 func importKeystore(c *cli.Context) error {
+	passwd := c.String("passwd")
+	keyfile := c.String("keyfile")
+
+	keyJSON, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		return err
+	}
+
+	_, err = wallet.keys.Import(keyJSON, passwd, passwd)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func exportKeystore(c *cli.Context) error {
+	address := c.String("account")
+	account := accounts.Account{Address: common.HexToAddress(address)}
+	account, err := wallet.keys.Find(account)
+	if err != nil {
+		return err
+	}
+
+	passwd := c.String("passwd")
+	keyJSON, err := wallet.keys.Export(account, passwd, passwd)
+	if err != nil {
+		return err
+	}
+
+	keyfile := c.String("keyfile")
+	err = ioutil.WriteFile(keyfile, keyJSON, 0755)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func checkBalance(c *cli.Context) error {
+	address := common.HexToAddress(c.String("address"))
+
+	balance, err := wallet.client.BalanceAt(wallet.ctx, address, nil)
+	if err != nil {
+		return err
+	}
+
+	var fBalance = big.NewFloat(0).SetInt(balance)
+	fmt.Println(fBalance.Quo(fBalance, big.NewFloat(etherWei)).String())
+
 	return nil
 }
 
 func transfer(c *cli.Context) error {
+	from := common.HexToAddress(c.String("from"))
+	account := accounts.Account{Address: from}
+	account, err := wallet.keys.Find(account)
+	if err != nil {
+		return err
+	}
+	passwd := c.String("passwd")
+
+	to := common.HexToAddress(c.String("to"))
+	ta, err := strconv.ParseFloat(c.String("amount"), 64)
+	if err != nil {
+		return err
+	}
+	amount := big.NewInt(int64(ta * etherWei))
+
+	nounce, err := wallet.nonceAt(account)
+	gasLimit, err := wallet.gasLimitRecommended()
+	gasPrice, err := wallet.gasPriceRecommended()
+	tx := types.NewTransaction(nounce, to, amount, gasLimit.Uint64(), gasPrice, nil)
+
+	id, err := wallet.chainID()
+	tx, err = wallet.keys.SignTxWithPassphrase(account, passwd, tx, id)
+	if err != nil {
+		return err
+	}
+
+	// send tx and check
+
+	return nil
+}
+
+func tmpKeyStore() *keystore.KeyStore {
+	d, err := ioutil.TempDir("", ".wallet-creco")
+	if err != nil {
+		panic(err)
+	}
+
+	return keystore.NewKeyStore(d, 2, 1)
+}
+
+func transactionHistory(c *cli.Context) error {
 	return nil
 }
