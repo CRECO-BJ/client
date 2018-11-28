@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -112,9 +111,7 @@ func main() {
 }
 
 func newAccount(c *cli.Context) error {
-	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("Please input the password for the new account:")
-
 	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err == nil {
 		return err
