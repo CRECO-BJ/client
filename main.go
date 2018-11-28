@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
 	"strconv"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -80,7 +82,7 @@ func init() {
 	}
 
 	app.After = func(ctx *cli.Context) error {
-		wallet.Wait()
+		//		wallet.Wait()
 		return nil
 	}
 }
@@ -96,7 +98,7 @@ func defaulWork(c *cli.Context) error {
 			syncing.PulledStates, syncing.KnownStates)
 	}
 
-	go wallet.Exit()
+	//	go wallet.Exit()
 
 	return err
 }
@@ -108,7 +110,12 @@ func main() {
 }
 
 func newAccount(c *cli.Context) error {
-	passwd := c.String("passwd")
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("Please input the password for the new account:")
+	passwd, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
 
 	a, err := wallet.keys.NewAccount(passwd)
 	if err != nil {
@@ -118,6 +125,29 @@ func newAccount(c *cli.Context) error {
 	fmt.Println("Account ", a, " has been created and added to the wallet")
 
 	return nil
+}
+
+// verifyPassword check the password string:
+// > 8 letters, has number, has uppercase, and has specialChar
+func verifyPassword(s string) bool {
+	letters := 0
+	var hasNum, hasUp, hasSpecial bool
+	for _, s := range s {
+		switch {
+		case unicode.IsNumber(s):
+			hasNum = true
+		case unicode.IsUpper(s):
+			hasUp = true
+			letters++
+		case unicode.IsPunct(s) || unicode.IsSymbol(s):
+			hasSpecial = true
+		case unicode.IsLetter(s) || s == ' ':
+			letters++
+		default: // letter not allowed
+			return false
+		}
+	}
+	return hasNum && hasUp && hasSpecial && (letters >= 8)
 }
 
 func importKeystore(c *cli.Context) error {
